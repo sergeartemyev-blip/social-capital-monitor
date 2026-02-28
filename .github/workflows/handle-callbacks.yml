@@ -1,0 +1,40 @@
+name: Handle Telegram Callbacks
+
+on:
+  schedule:
+    # Каждые 5 минут — минимальный интервал GitHub Actions
+    # ~20 сек работы * 288 запусков/день = ~96 мин/день = ~2880 мин/месяц
+    # Бесплатный лимит: 2000 мин/месяц для публичных репо (бесплатно)
+    # Для приватных: используем только в рабочие часы (8:00-22:00 MSK = 5:00-19:00 UTC)
+    - cron: '*/5 5-19 * * *'
+  workflow_dispatch:
+
+# Защита от одновременных запусков
+concurrency:
+  group: telegram-callbacks
+  cancel-in-progress: true
+
+jobs:
+  handle-callbacks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Handle Telegram button callbacks
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python handle_callbacks.py
