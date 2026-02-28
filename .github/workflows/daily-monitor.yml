@@ -2,8 +2,10 @@ name: Daily Social Capital Monitor
 
 on:
   schedule:
-    # 04:45 UTC = 07:45 Moscow — сначала мониторинг соцсетей
+    # 04:45 UTC = 07:45 Moscow — мониторинг соцсетей
     - cron: '45 4 * * *'
+    # 05:00 UTC = 08:00 Moscow — дайджест
+    - cron: '0 5 * * *'
   workflow_dispatch:
     inputs:
       run_mode:
@@ -16,11 +18,18 @@ on:
           - digest_only
           - monitor_only
 
+# Защита от одновременных запусков — если уже идёт, новый ждёт
+concurrency:
+  group: social-capital-monitor
+  cancel-in-progress: false
+
 jobs:
   monitor-social:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ github.event_name == 'schedule' || inputs.run_mode == 'both' || inputs.run_mode == 'monitor_only' }}
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '45 4 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'both' || inputs.run_mode == 'monitor_only'))
 
     steps:
       - name: Checkout repository
@@ -45,13 +54,9 @@ jobs:
   send-digest:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: monitor-social
     if: |
-      always() && (
-        github.event_name == 'schedule' ||
-        inputs.run_mode == 'both' ||
-        inputs.run_mode == 'digest_only'
-      )
+      (github.event_name == 'schedule' && github.event.schedule == '0 5 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'both' || inputs.run_mode == 'digest_only'))
 
     steps:
       - name: Checkout repository

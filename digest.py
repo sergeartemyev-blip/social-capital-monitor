@@ -280,12 +280,12 @@ def build_keyboard(c, card_type="normal"):
         return {
             "inline_keyboard": [
                 [
-                    {"text": "📅 Недавно (до 2 нед)", "callback_data": f"recent|{page_id}"},
-                    {"text": "🕐 Давно (1-3 мес)", "callback_data": f"medium|{page_id}"},
+                    {"text": "📅 Недавно", "callback_data": f"recent|{page_id}"},
+                    {"text": "🕐 1-3 месяца", "callback_data": f"medium|{page_id}"},
                 ],
                 [
-                    {"text": "⏳ Очень давно (3+ мес)", "callback_data": f"long_ago|{page_id}"},
-                    {"text": "🗑 Удалить из базы", "callback_data": f"delete|{page_id}"},
+                    {"text": "⏳ Давно (3+)", "callback_data": f"long_ago|{page_id}"},
+                    {"text": "🗑 Удалить", "callback_data": f"delete|{page_id}"},
                 ]
             ]
         }
@@ -328,29 +328,48 @@ def process_callbacks():
 
         if action == "done" and page_id:
             update_last_contact(page_id)
-            tg_answer_callback(callback["id"], "✅ Отмечено! Дата обновлена в Notion")
+            tg_answer_callback(callback["id"], "✅ Отмечено!")
+            # Убираем кнопки и добавляем подтверждение
+            requests.post(f"{TG_API}/editMessageReplyMarkup", json={
+                "chat_id": chat_id, "message_id": msg_id,
+                "reply_markup": json.dumps({"inline_keyboard": []})
+            }, timeout=10)
             tg_edit_message(chat_id, msg_id,
-                callback["message"]["text"] + "\n\n<i>✅ Связался сегодня</i>")
+                callback["message"]["text"] + "\n\n<i>✅ Связался сегодня — дата обновлена</i>")
 
         elif action == "snooze" and page_id:
             new_date = (date.today() + timedelta(days=7)).isoformat()
             update_next_contact(page_id, new_date)
             tg_answer_callback(callback["id"], "⏭ Перенесено на неделю")
+            requests.post(f"{TG_API}/editMessageReplyMarkup", json={
+                "chat_id": chat_id, "message_id": msg_id,
+                "reply_markup": json.dumps({"inline_keyboard": []})
+            }, timeout=10)
             tg_edit_message(chat_id, msg_id,
                 callback["message"]["text"] + "\n\n<i>⏭ Перенесено на 7 дней</i>")
 
         elif action in ("recent", "medium", "long_ago") and page_id:
             update_last_contact_approx(page_id, action)
-            labels = {"recent": "недавно", "medium": "около месяца назад", "long_ago": "давно"}
-            tg_answer_callback(callback["id"], f"✅ Записано: общались {labels[action]}")
+            labels = {"recent": "Недавно", "medium": "1-3 месяца назад", "long_ago": "Давно (3+)"}
+            label = labels[action]
+            tg_answer_callback(callback["id"], f"✅ Записано: {label}")
+            # Убираем кнопки и показываем результат
+            requests.post(f"{TG_API}/editMessageReplyMarkup", json={
+                "chat_id": chat_id, "message_id": msg_id,
+                "reply_markup": json.dumps({"inline_keyboard": []})
+            }, timeout=10)
             tg_edit_message(chat_id, msg_id,
-                callback["message"]["text"] + f"\n\n<i>✅ Записано: общались {labels[action]}</i>")
+                callback["message"]["text"] + f"\n\n<i>✅ {label}</i>")
 
         elif action == "delete" and page_id:
             delete_contact(page_id)
             tg_answer_callback(callback["id"], "🗑 Контакт архивирован")
+            requests.post(f"{TG_API}/editMessageReplyMarkup", json={
+                "chat_id": chat_id, "message_id": msg_id,
+                "reply_markup": json.dumps({"inline_keyboard": []})
+            }, timeout=10)
             tg_edit_message(chat_id, msg_id,
-                callback["message"]["text"] + "\n\n<i>🗑 Контакт удалён из базы</i>")
+                callback["message"]["text"] + "\n\n<i>🗑 Удалён из базы</i>")
 
         elif action == "open_tg" and extra:
             tg_answer_callback(callback["id"], f"Открываю @{extra}")
