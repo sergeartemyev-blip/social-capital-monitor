@@ -2,15 +2,25 @@ name: Daily Social Capital Monitor
 
 on:
   schedule:
-    # 05:00 UTC = 08:00 Moscow (UTC+3)
-    - cron: '0 5 * * *'
+    # 04:45 UTC = 07:45 Moscow — сначала мониторинг соцсетей
+    - cron: '45 4 * * *'
   workflow_dispatch:
-    # Позволяет запускать вручную из интерфейса GitHub или через API
+    inputs:
+      run_mode:
+        description: 'Что запустить'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - digest_only
+          - monitor_only
 
 jobs:
-  monitor:
+  monitor-social:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    if: ${{ github.event_name == 'schedule' || inputs.run_mode == 'both' || inputs.run_mode == 'monitor_only' }}
 
     steps:
       - name: Checkout repository
@@ -25,11 +35,41 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run monitor
+      - name: Run social media monitor
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python monitor_social.py
+
+  send-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: monitor-social
+    if: |
+      always() && (
+        github.event_name == 'schedule' ||
+        inputs.run_mode == 'both' ||
+        inputs.run_mode == 'digest_only'
+      )
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send digest
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        run: python monitor.py
+        run: python digest.py

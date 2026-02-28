@@ -14,7 +14,7 @@ from notion_client import Client
 
 # ── Конфигурация ──────────────────────────────────────────────────────────────
 NOTION_TOKEN       = os.environ["NOTION_TOKEN"]
-NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]   # 15bd188d-f5fe-4467-9408-dc09f0ba811f
+NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]   # b03e121d-30da-4657-b092-27bfcb449f23
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 YOUTUBE_API_KEY    = os.environ.get("YOUTUBE_API_KEY", "")
