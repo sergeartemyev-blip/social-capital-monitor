@@ -407,10 +407,6 @@ def build_news_feed(due_contacts):
 def main():
     print(f"[{datetime.now().isoformat()}] Запуск дайджеста...")
 
-    # Сначала обрабатываем накопившиеся нажатия кнопок
-    print("  Обрабатываем нажатия кнопок...")
-    process_callbacks()
-
     # Читаем базу
     print("  Читаем базу Notion...")
     all_pages = get_all_contacts()
