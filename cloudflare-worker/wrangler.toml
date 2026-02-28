@@ -1,0 +1,6 @@
+name = "social-capital-bot"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Секреты добавляются через: wrangler secret put TELEGRAM_BOT_TOKEN
+# Не хранить токены в этом файле!

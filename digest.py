@@ -274,12 +274,13 @@ def build_contact_card(c):
 def build_keyboard_normal(c):
     """Клавиатура для блока «Пора связаться»."""
     page_id = c["page_id"]
+    notion_url = f"https://www.notion.so/{page_id.replace('-', '')}"
     row1 = [{"text": "✅ Связался", "callback_data": f"done|{page_id}"}]
     row2 = [
         {"text": "⏭ Через неделю", "callback_data": f"snooze|{page_id}"},
         {"text": "🗑 Удалить", "callback_data": f"delete|{page_id}"},
     ]
-    row3 = [{"text": "📋 Открыть в Notion", "callback_data": f"notion|{page_id}"}]
+    row3 = [{"text": "📋 Открыть в Notion", "url": notion_url}]
     return {"inline_keyboard": [row1, row2, row3]}
 
 
