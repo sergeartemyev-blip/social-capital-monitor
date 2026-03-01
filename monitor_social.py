@@ -34,10 +34,9 @@ HIGH_PRIORITY_NEWS = {"Высокий", "Средний"}
 
 # ── Notion helpers ─────────────────────────────────────────────────────────────
 def get_contacts_to_monitor():
-    """Возвращает контакты, которые нужно мониторить сегодня."""
+    """Возвращает контакты с приоритетом Высокий/Средний у которых есть Telegram-канал.
+    Новости собираются независимо от дат — для всех приоритетных контактов ежедневно."""
     notion = Client(auth=NOTION_TOKEN)
-    today = date.today()
-    cutoff = today + timedelta(days=MONITOR_DAYS_BEFORE)
 
     all_pages = []
     cursor = None
@@ -55,65 +54,26 @@ def get_contacts_to_monitor():
     for page in all_pages:
         props = page["properties"]
 
-        # Фильтр по кругу
-        circle_sel = props.get("Круг", {}).get("select")
-        if not circle_sel or circle_sel.get("name") not in MONITORED_CIRCLES:
-            continue
-
         def get_url(field):
             v = props.get(field, {}).get("url")
             return v if v else None
-
-        def get_text(field):
-            rich = props.get(field, {}).get("rich_text", [])
-            return "".join(r.get("plain_text", "") for r in rich) if rich else ""
 
         def get_title():
             t = props.get("Имя", {}).get("title", [])
             return "".join(r.get("plain_text", "") for r in t) if t else "Без имени"
 
-        def get_date_val(field):
-            d = props.get(field, {}).get("date")
-            return d.get("start") if d else None
-
         name = get_title()
         priority = (props.get("Приоритет", {}).get("select") or {}).get("name", "")
-        last_contact = get_date_val("Последний контакт")
-        next_contact = get_date_val("Следующий контакт")
-        frequency = props.get("Частота контактов дни", {}).get("number")
         instagram = get_url("Insta")
         tg_channel = get_url("Telegram канал")
 
-        # Определяем нужен ли мониторинг
-        needs_monitoring = False
-
-        if next_contact:
-            try:
-                next_dt = date.fromisoformat(next_contact)
-                if next_dt <= cutoff:
-                    needs_monitoring = True
-            except Exception:
-                pass
-        elif last_contact and frequency:
-            try:
-                last_dt = date.fromisoformat(last_contact)
-                computed_next = last_dt + timedelta(days=int(frequency))
-                if computed_next <= cutoff:
-                    needs_monitoring = True
-            except Exception:
-                pass
-        elif not last_contact and not next_contact and priority == "Высокий":
-            needs_monitoring = True
-
-        if not needs_monitoring:
-            continue
-
-        # Есть ли соцсети для мониторинга
-        if not instagram and not tg_channel:
-            continue
-
-        # Фильтр по приоритету для новостей
+        # Только Высокий и Средний приоритет
         if priority not in HIGH_PRIORITY_NEWS:
+            continue
+
+        # Нужен хотя бы один источник для мониторинга
+        # Предпочитаем Telegram-канал, Instagram как запасной
+        if not tg_channel and not instagram:
             continue
 
         contacts.append({
