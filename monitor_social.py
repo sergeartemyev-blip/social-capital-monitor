@@ -65,14 +65,15 @@ def get_contacts_to_monitor():
         name = get_title()
         priority = (props.get("Приоритет", {}).get("select") or {}).get("name", "")
         instagram = get_url("Insta")
-        tg_channel = get_url("Telegram канал")
+        # Проверяем оба поля: публичный канал и личный TG
+        tg_channel = get_url("Telegram канал") or get_url("Личный TG")
 
         # Только Высокий и Средний приоритет
         if priority not in HIGH_PRIORITY_NEWS:
             continue
 
         # Нужен хотя бы один источник для мониторинга
-        # Предпочитаем Telegram-канал, Instagram как запасной
+        # Предпочитаем Telegram, Instagram как запасной
         if not tg_channel and not instagram:
             continue
 
@@ -137,13 +138,22 @@ def get_instagram_posts(username, max_posts=5):
 def extract_telegram_channel(url):
     if not url:
         return None
-    url = url.rstrip("/")
+    url = url.strip().rstrip("/")
+    # Формат 1: https://t.me/username или https://telegram.me/username
     parts = url.split("/")
     for i, p in enumerate(parts):
         if p in ("t.me", "telegram.me") and i + 1 < len(parts):
-            ch = parts[i + 1].lstrip("@")
-            if not ch.startswith("+"):
+            ch = parts[i + 1].lstrip("@").strip()
+            if ch and not ch.startswith("+"):
                 return ch
+    # Формат 2: @username
+    if url.startswith("@"):
+        ch = url.lstrip("@").strip()
+        if ch:
+            return ch
+    # Формат 3: просто username (без спецсимволов, не ссылка)
+    if url and "/" not in url and "." not in url and not url.startswith("+"):
+        return url.lstrip("@").strip()
     return None
 
 def get_telegram_posts(channel, max_posts=5):
