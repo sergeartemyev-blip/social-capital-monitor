@@ -6,6 +6,8 @@ on:
     - cron: '45 4 * * *'
     # 05:00 UTC = 08:00 Moscow — дайджест
     - cron: '0 5 * * *'
+    # 05:00 UTC 1-го числа каждого месяца — обогащение контактов (Чем занимается)
+    - cron: '0 5 1 * *'
   workflow_dispatch:
     inputs:
       run_mode:
@@ -17,6 +19,7 @@ on:
           - both
           - digest_only
           - monitor_only
+          - enrich_only
 
 # Защита от одновременных запусков — если уже идёт, новый ждёт
 concurrency:
@@ -78,3 +81,30 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python digest.py
+
+  enrich-contacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 5 1 * *') ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'enrich_only')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Enrich contacts (fill Чем занимается)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python enrich_contacts.py

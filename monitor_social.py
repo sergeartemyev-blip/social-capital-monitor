@@ -2,21 +2,19 @@
 """
 Social Capital Monitor — Скрипт 1: Мониторинг соцсетей
 Собирает посты из Instagram и Telegram, анализирует через Gemini AI,
-записывает ключевые события в поле «Заметки» в Notion.
+записывает ключевые события в поле «Новости» в Notion.
 Запускается ежедневно через GitHub Actions.
 """
-
 import os
-import json
 import time
 import requests
 from datetime import datetime, timedelta, date
 from notion_client import Client
+from gemini import generate_with_retry # Импортируем новую функцию
 
 # ── Конфигурация ──────────────────────────────────────────────────────────────
 NOTION_TOKEN       = os.environ["NOTION_TOKEN"]
 NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
-GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 
 # За сколько дней до срока начинаем мониторинг
 MONITOR_DAYS_BEFORE = 7
@@ -31,6 +29,8 @@ MONITORED_CIRCLES = {
     "Зона развития",
 }
 
+# Приоритеты для сбора новостей
+HIGH_PRIORITY_NEWS = {"Высокий", "Средний"}
 
 # ── Notion helpers ─────────────────────────────────────────────────────────────
 def get_contacts_to_monitor():
@@ -77,7 +77,6 @@ def get_contacts_to_monitor():
             return d.get("start") if d else None
 
         name = get_title()
-        circle = circle_sel.get("name")
         priority = (props.get("Приоритет", {}).get("select") or {}).get("name", "")
         last_contact = get_date_val("Последний контакт")
         next_contact = get_date_val("Следующий контакт")
@@ -113,10 +112,13 @@ def get_contacts_to_monitor():
         if not instagram and not tg_channel:
             continue
 
+        # Фильтр по приоритету для новостей
+        if priority not in HIGH_PRIORITY_NEWS:
+            continue
+
         contacts.append({
             "page_id": page["id"],
             "name": name,
-            "circle": circle,
             "priority": priority,
             "instagram": instagram,
             "telegram_channel": tg_channel,
@@ -125,18 +127,17 @@ def get_contacts_to_monitor():
     return contacts
 
 
-def update_notion_notes(page_id, new_notes):
-    """Обновляет поле Заметки в Notion."""
+def update_notion_field(page_id, field_name, content):
+    """Обновляет указанное текстовое поле в Notion."""
     notion = Client(auth=NOTION_TOKEN)
     notion.pages.update(
         page_id=page_id,
         properties={
-            "Заметки": {
-                "rich_text": [{"type": "text", "text": {"content": new_notes[:2000]}}]
+            field_name: {
+                "rich_text": [{"type": "text", "text": {"content": content[:2000]}}]
             }
         }
     )
-
 
 # ── Парсинг соцсетей ──────────────────────────────────────────────────────────
 def extract_instagram_username(url):
@@ -148,7 +149,6 @@ def extract_instagram_username(url):
         if p in ("instagram.com", "www.instagram.com") and i + 1 < len(parts):
             return parts[i + 1].lstrip("@")
     return None
-
 
 def get_instagram_posts(username, max_posts=5):
     if not username:
@@ -174,7 +174,6 @@ def get_instagram_posts(username, max_posts=5):
         print(f"  Instagram error @{username}: {e}")
         return []
 
-
 def extract_telegram_channel(url):
     if not url:
         return None
@@ -186,7 +185,6 @@ def extract_telegram_channel(url):
             if not ch.startswith("+"):
                 return ch
     return None
-
 
 def get_telegram_posts(channel, max_posts=5):
     if not channel:
@@ -211,11 +209,10 @@ def get_telegram_posts(channel, max_posts=5):
         print(f"  Telegram error @{channel}: {e}")
         return []
 
-
 # ── AI-анализ через Gemini ────────────────────────────────────────────────────
 def analyze_posts_with_gemini(name, posts):
     """Извлекает ключевые события из постов через Gemini AI."""
-    if not posts or not GEMINI_API_KEY:
+    if not posts:
         return ""
 
     posts_text = "\n---\n".join(posts)
@@ -234,20 +231,7 @@ def analyze_posts_with_gemini(name, posts):
 Максимум 4-5 пунктов. Только факты, без воды. Если ничего важного нет — напиши "• Нет значимых событий"
 Отвечай на русском языке."""
 
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": 300, "temperature": 0.3}
-        }
-        resp = requests.post(url, json=payload, timeout=30)
-        data = resp.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        return text.strip()
-    except Exception as e:
-        print(f"  Gemini error: {e}")
-        return ""
-
+    return generate_with_retry(prompt)
 
 # ── Главная функция ───────────────────────────────────────────────────────────
 def main():
@@ -284,13 +268,11 @@ def main():
         analysis = analyze_posts_with_gemini(name, posts)
         if analysis:
             today_str = date.today().strftime("%d.%m.%Y")
-            notes = f"[Обновлено {today_str}]\n{analysis}"
-            update_notion_notes(c["page_id"], notes)
-            print(f"    Заметки обновлены в Notion")
+            news_content = f"[Обновлено {today_str}]\n{analysis}"
+            update_notion_field(c["page_id"], "Новости", news_content)
+            print(f"    Новости обновлены в Notion")
         else:
             print(f"    AI не вернул результат")
-
-        time.sleep(1)  # Небольшая пауза между запросами
 
     print(f"\n[{datetime.now().isoformat()}] Мониторинг завершён")
 
