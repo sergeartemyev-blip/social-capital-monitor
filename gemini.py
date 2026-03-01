@@ -14,7 +14,7 @@ def generate_with_retry(prompt, max_retries=5, initial_delay=2):
         print("  GEMINI_API_KEY not set, skipping generation.")
         return ""
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": 500, "temperature": 0.3}
